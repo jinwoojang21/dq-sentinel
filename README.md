@@ -79,35 +79,61 @@ Iceberg tables, state and incident reports are written to `./.dq/`. Contract pro
 | `duplicates` | Producer retries re-send 15% of events | Upstream bug |
 | `volume_drop` | A partition goes quiet (~4% volume) | Upstream bug |
 | `out_of_range` | Refunds encoded as negative amounts | Upstream bug |
+| **hard** `unit_change` | `amount` switches to cents (x100). Only 13% of rows cross the max; the rest pass validation with wrong values | Upstream bug, sev1 |
+| **hard** `enum_case_change` | `currency` lower-cased (`usd`). Looks like new categories | Upstream bug, **not** a new category |
+| **hard** `mobile_null_customer` | `customer_id` dropped on mobile only. Looks like a schema problem | Upstream bug in the mobile client |
 
 ## Evals
 
 ```bash
-dq-sentinel evals --agent baseline   # runs in CI on every push
-dq-sentinel evals --agent claude     # needs ANTHROPIC_API_KEY; also a manual CI job
+dq-sentinel evals --agent baseline --suite core   # runs in CI on every push
+dq-sentinel evals --agent claude                  # needs ANTHROPIC_API_KEY; also a manual CI job
 ```
 
 Each scenario runs in a fresh lake: 6 healthy batches to build a baseline, then one bad batch.
 The incident report is graded on **root cause**, the **upstream bug vs. contract change** call,
 whether a **patch was proposed only when it should be**, and whether it includes **evidence**.
+The **hard** suite contains failures whose obvious symptom points at the wrong cause.
 
-Results (run #4, `claude-sonnet-5-5`):
+Latest results (`claude-sonnet-5-5`, 300-row batches):
 
-| scenario | expected | Claude agent | rule-based baseline |
-|---|---|---|---|
-| schema_drift_rename | schema_drift | ✅ PASS | ✅ PASS |
-| type_change | type_change | ✅ PASS | ✅ PASS |
-| null_spike | null_spike | ✅ PASS | ✅ PASS |
-| new_category | new_category | ✅ PASS | ✅ PASS |
-| duplicates | duplicates | ✅ PASS | ✅ PASS |
-| volume_drop | volume_anomaly | ✅ PASS | ✅ PASS |
-| out_of_range | out_of_range | ✅ PASS | ✅ PASS |
-| **total** | | **7/7** | **7/7** |
+| suite | scenario | Claude agent | tool calls | tokens in/out | rule-based baseline |
+|---|---|---|---|---|---|
+| core | schema_drift_rename | ✅ | 7 | 17.8k / 1.5k | ✅ |
+| core | type_change | ✅ | 7 | 12.0k / 1.2k | ✅ |
+| core | null_spike | ✅ | 6 | 11.1k / 1.3k | ✅ |
+| core | new_category | ✅ | 7 | 18.7k / 1.9k | ✅ |
+| core | duplicates | ✅ | 7 | 13.5k / 1.4k | ✅ |
+| core | volume_drop | ✅ | 5 | 11.1k / 1.3k | ✅ |
+| core | out_of_range | ✅ | 7 | 13.9k / 1.5k | ✅ |
+| hard | unit_change | ✅ | 7 | 13.5k / 1.5k | ❌ says `out_of_range` |
+| hard | enum_case_change | ✅ | 6 | 11.6k / 1.0k | ❌ says `new_category` and proposes adding `usd` to the contract |
+| hard | mobile_null_customer | ✅ | 7 | 11.9k / 1.3k | ❌ says `schema_drift` |
+| | **total** | **10/10** | | ~138k / 14k total | 7/10 |
 
-Both pass, but they get there in different ways. The baseline has one hand-written rule for each of
-these seven failure modes and would miss anything new. The Claude agent gets no rules: it works from
-the tools, the contract and the evidence alone. It also makes the bug-vs-contract-change call and
-writes the evidence and recommended actions itself. See [`docs/examples/`](docs/examples/) for a sample report.
+The baseline has a hand-written rule for each core failure mode and nothing more. On the hard
+scenarios those rules match the surface symptom and get the cause wrong. The `enum_case_change`
+miss is the dangerous kind: the baseline would "fix" a producer bug by widening the contract.
+
+### Example incident reports
+
+Compare these two reports on the same batch:
+
+- [`claude-unit_change.md`](docs/examples/claude-unit_change.md): Claude compares the `amount`
+  distribution with earlier batches using SQL and finds a 100x shift. It notices that the new amounts are all whole numbers and
+  concludes they're cents. It also notices that **261 of 300 corrupted rows passed validation**, raises it to sev1, and
+  recommends quarantining those rows. It specifically recommends *against* raising the contract max.
+- [`baseline-unit_change.md`](docs/examples/baseline-unit_change.md): the rule-based version says `out_of_range` and stops there.
+
+More: [`claude-enum_case_change.md`](docs/examples/claude-enum_case_change.md) ·
+[`claude-mobile_null_customer.md`](docs/examples/claude-mobile_null_customer.md) ·
+[`claude-schema_drift_rename.md`](docs/examples/claude-schema_drift_rename.md) (includes the proposed contract diff)
+
+### Found by the evals
+
+The first live run crashed: the model submitted a report without `upstream_bug`, the tool
+accepted it, and rendering failed. `submit_incident_report` now checks every required field and
+type and returns the error to the model, so it resubmits. A regression test covers this, and the next run passed all 10 scenarios.
 
 ## Project layout
 
@@ -124,7 +150,7 @@ src/dq_sentinel/
   agent/loop.py                 Claude tool-use loop (turn budget, nudge, fallback)
   agent/baseline.py             rule-based investigator (same tools)
   evals.py                      scenario grading
-tests/                          32 tests, incl. SQL-guard escapes and a scripted fake Claude client
+tests/                          36 tests, incl. SQL-guard escapes and a scripted fake Claude client
 ```
 
 ## Roadmap
