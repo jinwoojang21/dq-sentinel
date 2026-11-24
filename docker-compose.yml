@@ -1,0 +1,49 @@
+# Local streaming stack: Redpanda (Kafka API) + console + producer + dq-sentinel consumer.
+#   docker compose up -d redpanda console
+#   docker compose run --rm producer --scenario schema_drift_rename
+#   docker compose up sentinel
+services:
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
+    command:
+      - redpanda start
+      - --mode dev-container
+      - --smp 1
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+    ports: ["19092:19092"]
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  console:
+    image: docker.redpanda.com/redpandadata/console:v2.7.2
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+    ports: ["8080:8080"]
+    depends_on:
+      redpanda: { condition: service_healthy }
+
+  producer:
+    build: .
+    entrypoint: ["dq-sentinel", "produce", "--bootstrap", "redpanda:9092"]
+    command: ["--scenario", "schema_drift_rename", "--healthy-batches", "8", "--batch-size", "500"]
+    depends_on:
+      redpanda: { condition: service_healthy }
+    profiles: ["tools"]
+
+  sentinel:
+    build: .
+    entrypoint: ["dq-sentinel", "consume", "--bootstrap", "redpanda:9092"]
+    command: ["--batch-size", "500"]
+    env_file: [{ path: .env, required: false }]
+    environment:
+      DQ_HOME: /data
+      DQ_LOG_LEVEL: INFO
+    volumes:
+      - ./.dq:/data
+      - ./contracts:/app/contracts
+    depends_on:
+      redpanda: { condition: service_healthy }

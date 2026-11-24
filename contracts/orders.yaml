@@ -1,0 +1,45 @@
+# Data contract for the `orders` event stream.
+# The pipeline enforces it record-by-record (quarantine) and batch-by-batch (SLO checks).
+# The agent may PROPOSE changes to this file (written to contracts/proposals/); it never edits it directly.
+name: orders
+version: 3
+owner: commerce-data
+description: Order lifecycle events emitted by the checkout service.
+
+fields:
+  order_id:
+    type: string
+    required: true
+    unique: true
+  customer_id:
+    type: string
+    required: true
+  amount:
+    type: double
+    required: true
+    min: 0
+    max: 10000
+  currency:
+    type: string
+    required: true
+    allowed: [USD, EUR, GBP]
+  status:
+    type: string
+    required: true
+    allowed: [placed, shipped, cancelled, refunded]
+  created_at:
+    type: timestamp
+    required: true
+  channel:
+    type: string
+    required: false
+    allowed: [web, mobile, store]
+    max_null_rate: 0.05
+
+slos:
+  max_quarantine_rate: 0.02   # share of records that fail record-level validation
+  max_duplicate_rate: 0.01    # share of records whose unique key repeats within a batch
+  schema_drift_threshold: 0.5 # share of records with unexpected/missing fields before it's called drift
+  volume_min_ratio: 0.5       # batch size vs trailing median
+  volume_max_ratio: 3.0
+  volume_min_history: 5       # batches needed before volume checks run
