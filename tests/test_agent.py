@@ -6,9 +6,9 @@ from types import SimpleNamespace
 import pytest
 
 from dq_sentinel.agent import Toolbox
-from dq_sentinel.evals import run_scenario
+from dq_sentinel.evals import SUITES, run_scenario
 from dq_sentinel.pipeline import Pipeline
-from dq_sentinel.producer import EXPECTED_ROOT_CAUSE, scenario_stream
+from dq_sentinel.producer import scenario_stream
 
 
 @pytest.fixture
@@ -107,7 +107,14 @@ def test_claude_loop_falls_back_when_agent_never_submits(settings):
     assert out.report["root_cause"] == "unknown"
 
 
-@pytest.mark.parametrize("scenario", list(EXPECTED_ROOT_CAUSE))
-def test_baseline_eval(settings, scenario):
+@pytest.mark.parametrize("scenario", SUITES["core"])
+def test_baseline_passes_core_suite(settings, scenario):
     r = run_scenario(scenario, "baseline", settings.contracts_dir, batch_size=200)
     assert r.passed, r
+
+
+@pytest.mark.parametrize("scenario", SUITES["hard"])
+def test_hard_scenarios_open_incidents_that_fool_the_baseline(settings, scenario):
+    r = run_scenario(scenario, "baseline", settings.contracts_dir, batch_size=300)
+    assert r.got != "no-incident"          # checks fired
+    assert not r.root_cause_ok, r          # but the surface symptom misleads the rules

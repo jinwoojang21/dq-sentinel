@@ -21,7 +21,17 @@ SCENARIOS: dict[str, str] = {
     "duplicates": "A producer retry bug re-sends ~15% of events with the same order_id.",
     "volume_drop": "A partition stops producing; batch volume falls to ~4% of normal.",
     "out_of_range": "Refunds start being encoded as negative amounts (~20% of events).",
+    # --- hard scenarios: the surface symptom points at the wrong cause ---
+    "unit_change": "Upstream switches `amount` to cents (x100). Only the largest orders breach the max; "
+                   "the rest pass validation but are silently 100x too big.",
+    "enum_case_change": "A serializer change lower-cases `currency` ('usd', 'eur'). Looks like new "
+                        "categories, but it's a formatting bug.",
+    "mobile_null_customer": "A mobile app release drops `customer_id` on ~70% of mobile orders; web and "
+                            "store are unaffected.",
 }
+
+# Scenarios whose obvious symptom is misleading; the rule-based baseline is expected to fail these.
+HARD_SCENARIOS = {"unit_change", "enum_case_change", "mobile_null_customer"}
 
 # What a correct investigation should conclude — used by the eval suite.
 EXPECTED_ROOT_CAUSE = {
@@ -32,6 +42,9 @@ EXPECTED_ROOT_CAUSE = {
     "duplicates": "duplicates",
     "volume_drop": "volume_anomaly",
     "out_of_range": "out_of_range",
+    "unit_change": "unit_change",
+    "enum_case_change": "format_change",
+    "mobile_null_customer": "null_spike",
 }
 
 
@@ -92,6 +105,16 @@ def generate_batch(
             if rng.random() < 0.20:
                 r["amount"] = -r["amount"]
                 r["status"] = "refunded"
+    elif scenario == "unit_change":
+        for r in records:
+            r["amount"] = round(r["amount"] * 100, 0)
+    elif scenario == "enum_case_change":
+        for r in records:
+            r["currency"] = r["currency"].lower()
+    elif scenario == "mobile_null_customer":
+        for r in records:
+            if r["channel"] == "mobile" and rng.random() < 0.7:
+                r["customer_id"] = None
     return records
 
 

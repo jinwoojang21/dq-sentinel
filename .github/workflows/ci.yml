@@ -21,7 +21,7 @@ jobs:
       - run: ruff check src tests
       - run: pytest -q
       - name: Baseline evals
-        run: dq-sentinel evals --agent baseline --strict
+        run: dq-sentinel evals --agent baseline --suite core --strict
 
   claude-evals:
     # Runs the real agent only when the repo has an ANTHROPIC_API_KEY secret.
@@ -38,8 +38,17 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -o pipefail
-          dq-sentinel evals --agent claude | tee evals.md
+          dq-sentinel evals --agent claude --save-reports reports | tee evals.md
           cat evals.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Print incident reports
+        if: always()
+        run: |
+          for f in reports/*.md; do echo "=====BEGIN $f====="; cat "$f"; echo "=====END $f====="; done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: claude-incident-reports
+          path: reports/
 
   kafka-smoke:
     runs-on: ubuntu-latest

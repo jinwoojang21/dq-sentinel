@@ -24,8 +24,16 @@ from ..contract import PATCH_OPS, apply_patch, yaml_diff
 
 ROOT_CAUSES = [
     "schema_drift", "type_change", "null_spike", "new_category",
-    "duplicates", "volume_anomaly", "out_of_range", "unknown",
+    "duplicates", "volume_anomaly", "out_of_range", "unit_change", "format_change", "unknown",
 ]
+ROOT_CAUSE_HELP = (
+    "schema_drift: fields renamed/added/removed; type_change: values arrive as a different type; "
+    "null_spike: a field goes missing/null for a share of events; new_category: a genuinely new valid "
+    "enum value; duplicates: repeated unique keys; volume_anomaly: batch size far from normal; "
+    "out_of_range: values outside bounds because their meaning/sign changed; unit_change: same field, "
+    "different unit or scale (e.g. cents vs dollars) — check distributions vs history; format_change: "
+    "same values in a different textual format (case, padding, separators); unknown: none fit."
+)
 SEVERITIES = ["sev1", "sev2", "sev3"]
 MAX_SQL_ROWS = 50
 
@@ -116,7 +124,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                              "description": "sev1: data loss/corruption reaching consumers; "
                                             "sev2: large share quarantined or misleading metrics; "
                                             "sev3: minor or contained."},
-                "root_cause": {"type": "string", "enum": ROOT_CAUSES},
+                "root_cause": {"type": "string", "enum": ROOT_CAUSES, "description": ROOT_CAUSE_HELP},
                 "summary": {"type": "string", "description": "2-4 sentences for an on-call engineer."},
                 "evidence": {"type": "array", "items": {"type": "string"}, "minItems": 1,
                              "description": "Concrete observations (numbers, field names, sample values)."},

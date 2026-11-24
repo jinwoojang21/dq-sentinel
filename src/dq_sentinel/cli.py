@@ -5,6 +5,7 @@ import logging
 import os
 import shutil
 import sys
+from pathlib import Path
 
 from .config import Settings
 from .producer import SCENARIOS, scenario_stream
@@ -74,7 +75,8 @@ def cmd_evals(a: argparse.Namespace) -> int:
     from .evals import format_table, run_all, to_json
 
     s = Settings()
-    results = run_all(a.agent, s.contracts_dir, a.scenario or None)
+    results = run_all(a.agent, s.contracts_dir, a.scenario or None, suite=a.suite,
+                      save_reports=Path(a.save_reports) if a.save_reports else None)
     print(to_json(results) if a.json else format_table(results))
     return 0 if all(r.passed for r in results) or not a.strict else 1
 
@@ -115,6 +117,8 @@ def main(argv: list[str] | None = None) -> int:
 
     e = sub.add_parser("evals", help="grade the investigator on every failure scenario")
     e.add_argument("--scenario", action="append")
+    e.add_argument("--suite", choices=["core", "hard", "all"], default="all")
+    e.add_argument("--save-reports", metavar="DIR", help="copy each incident report into DIR")
     e.add_argument("--json", action="store_true")
     e.add_argument("--strict", action="store_true", help="exit 1 if any scenario fails")
     e.add_argument("--agent", choices=["claude", "baseline"], default=_agent_default())
