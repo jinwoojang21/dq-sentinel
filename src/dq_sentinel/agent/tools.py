@@ -237,6 +237,17 @@ class Toolbox:
         return {"written_to": str(path), "new_version": new["version"], "diff": diff}
 
     def t_submit_incident_report(self, **report: Any) -> dict[str, Any]:
+        # Models occasionally skip a required field; reject so the loop feeds the error back
+        # and the model resubmits, instead of letting a partial report through.
+        schema = next(t for t in TOOL_SCHEMAS if t["name"] == "submit_incident_report")["input_schema"]
+        missing = [k for k in schema["required"] if k not in report]
+        if missing:
+            raise ValueError(f"missing required field(s): {missing}")
+        if not isinstance(report["upstream_bug"], bool):
+            raise TypeError("upstream_bug must be a boolean")
+        for k in ("evidence", "recommended_actions"):
+            if not isinstance(report[k], list) or not all(isinstance(x, str) for x in report[k]):
+                raise TypeError(f"{k} must be a list of strings")
         if report.get("root_cause") not in ROOT_CAUSES:
             raise ValueError(f"root_cause must be one of {ROOT_CAUSES}")
         if report.get("severity") not in SEVERITIES:

@@ -53,6 +53,15 @@ def test_unknown_tool_and_bad_args_are_errors_not_crashes(drift_pipeline):
     assert tb.call("submit_incident_report", {"root_cause": "aliens"})[1]
 
 
+def test_incomplete_report_rejected_so_model_can_retry(drift_pipeline):
+    tb = toolbox(drift_pipeline)
+    partial = {"severity": "sev2", "root_cause": "schema_drift", "summary": "x",
+               "evidence": ["e"], "recommended_actions": ["a"]}  # no upstream_bug
+    out, err = tb.call("submit_incident_report", partial)
+    assert err and "upstream_bug" in out and tb.report is None
+    assert not tb.call("submit_incident_report", partial | {"upstream_bug": False})[1]
+
+
 # ------------------------------------------------------------------ fake Anthropic client
 def _block(**kw):
     return SimpleNamespace(**kw)
