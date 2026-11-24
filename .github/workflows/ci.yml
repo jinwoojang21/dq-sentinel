@@ -37,6 +37,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          set -o pipefail
           dq-sentinel evals --agent claude | tee evals.md
           cat evals.md >> "$GITHUB_STEP_SUMMARY"
 
@@ -50,6 +51,7 @@ jobs:
         run: docker compose run --rm producer --scenario schema_drift_rename --healthy-batches 6 --batch-size 300 --interval 0
       - name: Consume and investigate
         run: |
+          set -o pipefail
           docker compose run --rm sentinel --batch-size 300 --agent baseline --max-batches 7 | tee out.txt
           grep -q "schema_drift" out.txt
       - if: always()
