@@ -91,21 +91,23 @@ Each scenario runs in a fresh lake: 6 healthy batches to build a baseline, then 
 The incident report is graded on **root cause**, the **upstream bug vs. contract change** call,
 whether a **patch was proposed only when it should be**, and whether it includes **evidence**.
 
-Baseline results:
+Results (run #4, `claude-sonnet-5-5`):
 
-| scenario | expected | got | cause | bug? | patch | evidence | result |
-|---|---|---|---|---|---|---|---|
-| schema_drift_rename | schema_drift | schema_drift | ✓ | ✓ | ✓ | ✓ | PASS |
-| type_change | type_change | type_change | ✓ | ✓ | ✓ | ✓ | PASS |
-| null_spike | null_spike | null_spike | ✓ | ✓ | ✓ | ✓ | PASS |
-| new_category | new_category | new_category | ✓ | ✓ | ✓ | ✓ | PASS |
-| duplicates | duplicates | duplicates | ✓ | ✓ | ✓ | ✓ | PASS |
-| volume_drop | volume_anomaly | volume_anomaly | ✓ | ✓ | ✓ | ✓ | PASS |
-| out_of_range | out_of_range | out_of_range | ✓ | ✓ | ✓ | ✓ | PASS |
+| scenario | expected | Claude agent | rule-based baseline |
+|---|---|---|---|
+| schema_drift_rename | schema_drift | ✅ PASS | ✅ PASS |
+| type_change | type_change | ✅ PASS | ✅ PASS |
+| null_spike | null_spike | ✅ PASS | ✅ PASS |
+| new_category | new_category | ✅ PASS | ✅ PASS |
+| duplicates | duplicates | ✅ PASS | ✅ PASS |
+| volume_drop | volume_anomaly | ✅ PASS | ✅ PASS |
+| out_of_range | out_of_range | ✅ PASS | ✅ PASS |
+| **total** | | **7/7** | **7/7** |
 
-The baseline only passes because it was written for exactly these seven failure modes. The Claude
-agent gets no such rules: it has to reason from the tools, and it writes much richer evidence and
-recommended actions. See [`docs/examples/`](docs/examples/) for a sample report.
+Both pass, but they get there in different ways. The baseline has one hand-written rule for each of
+these seven failure modes and would miss anything new. The Claude agent gets no rules: it works from
+the tools, the contract and the evidence alone. It also makes the bug-vs-contract-change call and
+writes the evidence and recommended actions itself. See [`docs/examples/`](docs/examples/) for a sample report.
 
 ## Project layout
 
